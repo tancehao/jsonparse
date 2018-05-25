@@ -41,8 +41,8 @@ var CertainValues = []string{
 type Parser struct {
 	data []byte
 
+	root             *Elem
 	unassignedKey    string
-	currentElem      *Elem
 	currentContainer *Elem
 	stack            []byte
 }
@@ -67,11 +67,10 @@ func (p *Parser) Parse() (err error) {
 			switch {
 			case tk == BraceOpen || tk == BracketOpen:
 				if tk == BraceOpen {
-					ele = NewElem(T_OBJECT, p.currentContainer, offset)
+					ele = NewElem(T_OBJECT, p, offset)
 				} else {
-					ele = NewElem(T_ARRAY, p.currentContainer, offset)
+					ele = NewElem(T_ARRAY, p, offset)
 				}
-				ele.joinSiblings(p.unassignedKey)
 				p.currentContainer = ele
 				p.stackPush(tk)
 			case tk == BraceClose || tk == BracketClose:
@@ -86,13 +85,11 @@ func (p *Parser) Parse() (err error) {
 					return ErrNotJson
 				}
 				p.currentContainer.limit = offset + length
-				p.currentContainer = o.currentContainer.Parent
+				p.currentContainer = p.currentContainer.Parent
 			case tk == Comma:
 				if p.currentContainer == nil || (p.currentContainer.Type != T_OBJECT && p.currentContainer.Type != T_ARRAY) {
 					return ErrNotJson
 				}
-				p.currentElem.limit = offset
-				p.currentElem = nil
 			case tk == Colon:
 				if p.currentContainer == nil || (p.currentContainer.Type != T_OBJECT && p.currentContainer.Type != T_ARRAY) {
 					return ErrNotJson
@@ -105,31 +102,27 @@ func (p *Parser) Parse() (err error) {
 				if p.currentContainer == nil && offset != 0 {
 					return ErrNotJson
 				}
-				if offset == 0 { // the json is a single string
-					ele = NewElem(T_STRING, nil, 0)
-					ele.limit = length
-				}
-				if p.currentContainer != nil {
-					if p.currentContainer.Type == T_ARRAY {
-						ele = NewElem(T_STRING, p.currentContainer, offset)
-						ele.joinSiblings("")
-					} else { //it's parent is an object, this string can be either a key or a value
-						if p.unassignedKey == "" { //key
-							p.unassignedKey = string(token)
-						} else { //value
-							ele = NewElem(T_STRING, p.currentContainer, offset)
-							ele.Key = p.unassignedKey
-							ele.limit = offset + length
-							p.unassignedKey = ""
-							p.currentElem = ele
-						}
-					}
+				//if the string is not a key in an object, create an element
+				if p.currentContainer != nil && p.currentContainer.Type == T_OBJECT && p.unassignedKey == "" {
+					p.unassignedKey = string(token)
+				} else {
+					ele = NewElem(T_STRING, p, offset)
+					ele.limit = offset + length
 				}
 			case IsCertainValue(token, length):
-				//TODO
+				if string(token) == Null {
+					ele = NewElem(T_NULL, p, offset)
+				} else {
+					ele = NewElem(T_BOOL, p, offset)
+				}
+				ele.limit = offset + length
 			default:
-				//num
+				ele = NewElem(T_NUMBER, p, offset)
+				ele.limit = offset + length
 			}
+		}
+		if p.root == nil && ele != nil {
+			p.root = ele
 		}
 		offset += length
 	}

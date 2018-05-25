@@ -4,6 +4,7 @@ const (
 	T_NUMBER = iota
 	T_STRING
 	T_BOOL
+	T_NULL
 	T_ARRAY
 	T_OBJECT
 )
@@ -12,33 +13,61 @@ type Elem struct {
 	Type     int
 	Key      string //used for values in object
 	Parent   *Elem
-	Children []*Elem
-	Map      map[string]*Elem
+	Children map[string]*Elem
 
 	offset int64
 	limit  int64
 }
 
-func NewElem(t int, parent *Elem, offset int64) *Elem {
-	return &Elem{
+//create an element, the context of the parser is needed to
+//determine the element's attributes and relationships
+func NewElem(t int, p *Parser, offset int64) (ele *Elem) {
+	ele = &Elem{
 		Type:     t,
 		Key:      "",
-		Parent:   parent,
-		Children: []*Elem{},
-		Map:      map[string]*Elem{},
+		Parent:   p.currentContainer,
+		Children: map[string]*Elem{},
 		offset:   offset,
 		limit:    offset,
 	}
+
+	if ele.Parent == nil {
+		return
+	}
+
+	//add to it's parent's children
+	if ele.Parent.Type == T_OBJECT && p.unassignedKey != "" {
+		ele.Key, p.unassignedKey = p.unassignedKey, ""
+		ele.Parent.Children[ret.Key] = ele
+	}
+	if ele.Parent.Type == T_ARRAY {
+		ele.Key = strconv.Itoa(len(ele.Parent.children))
+		ele.Parent.Children[ele.Key] = ele
+	}
+
+	return
 }
 
-//add a element to it's parent's children
-func (ele *Elem) joinSiblings(key string) {
-	if ele.Parent {
-		if ele.Parent.Type == T_OBJECT {
-			ele.Parent.Map[key] = ele
-			ele.Key = key
-		} else {
-			ele.Parent.Children = append(ele.Parent.Children, ele)
-		}
-	}
+func (ele *Elem) Content() []byte {
+
+}
+
+func (ele *Elem) Find(selector string) (ret *Elem) {
+
+}
+
+func (ele *Elem) String() string {
+
+}
+
+func (ele *Elem) Int64() int64 {
+
+}
+
+func (ele *Elem) Bool() bool {
+
+}
+
+func (ele *Elem) Float64() float64 {
+
 }
