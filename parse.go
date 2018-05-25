@@ -10,21 +10,20 @@ var ErrNotJson = errors.New("unable to parse non-json data")
 var ErrEOF = errors.New("EOF")
 
 var (
-	Comma        = ','
-	Quote        = '"'
-	Colon        = ':'
-	BraceOpen    = '{'
-	BraceClose   = '}'
-	BracketOpen  = '['
-	BracketClose = ']'
-	Null         = "null"
-	BoolTrue     = "true"
-	BoolFalse    = "false"
+	Comma       byte = ','
+	Quote       byte = '"'
+	Colon       byte = ':'
+	BraceOpen   byte  = '{'
+	BraceClose  byte  = '}'
+	BracketOpen byte  = '['
+	BracketClose byte = ']'
+	Null        string  = "null"
+	BoolTrue    string  = "true"
+	BoolFalse   string  = "false"
 )
 
 var Separators = []byte{
 	Comma,
-	Quote,
 	Colon,
 	BraceOpen,
 	BraceClose,
@@ -51,16 +50,17 @@ func NewParser(data []byte) (p *Parser) {
 	return &Parser{data: data}
 }
 
-func (p *Parser) Parse() (err error) {
-	var offset int64
+func (p *Parser) Parse() (root *Elem, err error) {
+    var offset int64
 	var ele *Elem
 	for {
-		token, length, err := ReadToken(p.data, offset)
-		if err == ErrEOF {
+		token, length, err1 := ReadToken(p.data, offset)
+        if err1 == ErrEOF {
 			break
 		}
-		if err != nil {
-			return
+		if err1 != nil {
+			err = err1
+            return
 		}
 		if length == 1 && IsSeparator(token[0]) {
 			tk := token[0]
@@ -72,27 +72,27 @@ func (p *Parser) Parse() (err error) {
 					ele = NewElem(T_ARRAY, p, offset)
 				}
 				p.currentContainer = ele
-				p.stackPush(tk)
+                p.stackPush(tk)
 			case tk == BraceClose || tk == BracketClose:
 				pre, err := p.stackPull()
 				if err != nil {
-					return ErrNotJson
+                    return nil, ErrNotJson
 				}
-				if tk == BraceClose && pre != BraceClose {
-					return ErrNotJson
+				if tk == BraceClose && pre != BraceOpen {
+					return nil, ErrNotJson
 				}
 				if tk == BracketClose && pre != BracketOpen {
-					return ErrNotJson
+					return nil, ErrNotJson
 				}
 				p.currentContainer.limit = offset + length
 				p.currentContainer = p.currentContainer.Parent
 			case tk == Comma:
 				if p.currentContainer == nil || (p.currentContainer.Type != T_OBJECT && p.currentContainer.Type != T_ARRAY) {
-					return ErrNotJson
+					return nil, ErrNotJson
 				}
 			case tk == Colon:
 				if p.currentContainer == nil || (p.currentContainer.Type != T_OBJECT && p.currentContainer.Type != T_ARRAY) {
-					return ErrNotJson
+					return nil, ErrNotJson
 				}
 			}
 		} else {
@@ -100,11 +100,11 @@ func (p *Parser) Parse() (err error) {
 			case token[0] == Quote && token[length-1] == Quote:
 				//string
 				if p.currentContainer == nil && offset != 0 {
-					return ErrNotJson
+					return nil, ErrNotJson
 				}
 				//if the string is not a key in an object, create an element
-				if p.currentContainer != nil && p.currentContainer.Type == T_OBJECT && p.unassignedKey == "" {
-					p.unassignedKey = string(token)
+                if p.currentContainer != nil && p.currentContainer.Type == T_OBJECT && p.unassignedKey == "" {
+                    p.unassignedKey = string(token)
 				} else {
 					ele = NewElem(T_STRING, p, offset)
 					ele.limit = offset + length
@@ -122,11 +122,15 @@ func (p *Parser) Parse() (err error) {
 			}
 		}
 		if p.root == nil && ele != nil {
-			p.root = ele
+            for _, b := range p.data {
+                ele.data = append(ele.data, b)
+            }
+            p.root = ele
+            root = ele
 		}
 		offset += length
 	}
-	return nil
+	return
 }
 
 //push a token to the stack
@@ -171,7 +175,7 @@ func ReadToken(data []byte, offset int64) (token []byte, length int64, err error
 	}
 }
 
-func IsCertainValue(token []data, length int64) bool {
+func IsCertainValue(token []byte, length int64) bool {
 	if length > 5 {
 		return false
 	}
