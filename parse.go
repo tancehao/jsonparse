@@ -1,6 +1,7 @@
 package jsonparse
 
 import (
+	"bytes"
 	"errors"
 )
 
@@ -10,16 +11,16 @@ var ErrNotJson = errors.New("unable to parse non-json data")
 var ErrEOF = errors.New("EOF")
 
 var (
-	Comma       byte = ','
-	Quote       byte = '"'
-	Colon       byte = ':'
-	BraceOpen   byte  = '{'
-	BraceClose  byte  = '}'
-	BracketOpen byte  = '['
-	BracketClose byte = ']'
-	Null        string  = "null"
-	BoolTrue    string  = "true"
-	BoolFalse   string  = "false"
+	Comma        byte   = ','
+	Quote        byte   = '"'
+	Colon        byte   = ':'
+	BraceOpen    byte   = '{'
+	BraceClose   byte   = '}'
+	BracketOpen  byte   = '['
+	BracketClose byte   = ']'
+	Null         string = "null"
+	BoolTrue     string = "true"
+	BoolFalse    string = "false"
 )
 
 var Separators = []byte{
@@ -51,16 +52,16 @@ func NewParser(data []byte) (p *Parser) {
 }
 
 func (p *Parser) Parse() (root *Elem, err error) {
-    var offset int64
+	var offset int64
 	var ele *Elem
 	for {
 		token, length, err1 := ReadToken(p.data, offset)
-        if err1 == ErrEOF {
+		if err1 == ErrEOF {
 			break
 		}
 		if err1 != nil {
 			err = err1
-            return
+			return
 		}
 		if length == 1 && IsSeparator(token[0]) {
 			tk := token[0]
@@ -72,11 +73,11 @@ func (p *Parser) Parse() (root *Elem, err error) {
 					ele = NewElem(T_ARRAY, p, offset)
 				}
 				p.currentContainer = ele
-                p.stackPush(tk)
+				p.stackPush(tk)
 			case tk == BraceClose || tk == BracketClose:
 				pre, err := p.stackPull()
 				if err != nil {
-                    return nil, ErrNotJson
+					return nil, ErrNotJson
 				}
 				if tk == BraceClose && pre != BraceOpen {
 					return nil, ErrNotJson
@@ -103,11 +104,11 @@ func (p *Parser) Parse() (root *Elem, err error) {
 					return nil, ErrNotJson
 				}
 				//if the string is not a key in an object, create an element
-                if p.currentContainer != nil && p.currentContainer.Type == T_OBJECT && p.unassignedKey == "" {
-                    p.unassignedKey = string(token)
+				if p.currentContainer != nil && p.currentContainer.Type == T_OBJECT && p.unassignedKey == "" {
+					p.unassignedKey = string(bytes.Trim(token, "\""))
 				} else {
-					ele = NewElem(T_STRING, p, offset)
-					ele.limit = offset + length
+					ele = NewElem(T_STRING, p, offset+1)
+					ele.limit = offset + length - 1
 				}
 			case IsCertainValue(token, length):
 				if string(token) == Null {
@@ -122,11 +123,11 @@ func (p *Parser) Parse() (root *Elem, err error) {
 			}
 		}
 		if p.root == nil && ele != nil {
-            for _, b := range p.data {
-                ele.data = append(ele.data, b)
-            }
-            p.root = ele
-            root = ele
+			for _, b := range p.data {
+				ele.data = append(ele.data, b)
+			}
+			p.root = ele
+			root = ele
 		}
 		offset += length
 	}
