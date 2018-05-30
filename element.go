@@ -1,6 +1,7 @@
 package jsonparse
 
 import (
+	"errors"
 	"fmt"
 	"strconv"
 )
@@ -15,11 +16,11 @@ const (
 )
 
 type Elem struct {
-	Type         int
-	Key          string //used for values in object
-	Parent       *Elem
-	Children     map[string]*Elem
-	childrenKeys []string //specify the order of the children
+	Type        int
+	Key         string //used for values in object
+	Parent      *Elem
+	Children    map[string]*Elem
+	OrderedKeys []string //specify the order of the children
 
 	data   []byte //used for the root element
 	offset int64
@@ -45,12 +46,12 @@ func NewElem(t int, p *Parser, offset int64) (ele *Elem) {
 	if ele.Parent.Type == T_OBJECT && p.unassignedKey != "" {
 		ele.Key, p.unassignedKey = p.unassignedKey, ""
 		ele.Parent.Children[ele.Key] = ele
-		ele.Parent.childrenKeys = append(ele.Parent.childrenKeys, ele.Key)
+		ele.Parent.OrderedKeys = append(ele.Parent.OrderedKeys, ele.Key)
 	}
 	if ele.Parent.Type == T_ARRAY {
 		ele.Key = strconv.Itoa(len(ele.Parent.Children))
 		ele.Parent.Children[ele.Key] = ele
-		ele.Parent.childrenKeys = append(ele.Parent.childrenKeys, ele.Key)
+		ele.Parent.OrderedKeys = append(ele.Parent.OrderedKeys, ele.Key)
 	}
 
 	return
@@ -83,7 +84,7 @@ func (ele *Elem) Print() {
 				printntabs(ele.level())
 				fmt.Print("}")
 			}()
-			for _, k := range ele.childrenKeys {
+			for _, k := range ele.OrderedKeys {
 				printntabs(ele.level() + 1)
 				fmt.Printf("\"%s\": ", k)
 				v, _ := ele.Children[k]
@@ -99,7 +100,7 @@ func (ele *Elem) Print() {
 				printntabs(ele.level())
 				fmt.Print("]")
 			}()
-			for _, k := range ele.childrenKeys {
+			for _, k := range ele.OrderedKeys {
 				v, _ := ele.Children[k]
 				v.Print()
 				fmt.Println(",")
@@ -136,23 +137,58 @@ func (ele *Elem) String() string {
 	return string(ele.Content())
 }
 
-func (ele *Elem) Int64() int64 {
+func (ele *Elem) Int64() (int64, error) {
+	var ErrNotInt64 error = errors.New("value is not of int64 type")
 	if ele.Type != T_NUMBER {
-		return int64(0)
+		return 0, ErrNotInt64
 	}
-	i, err := strconv.Atoi(ele.String())
+	i, err := strconv.ParseInt(ele.String(), 10, 64)
 	if err != nil {
-		return int64(0)
+		return 0, ErrNotInt64
 	}
-	return int64(i)
+	return i, nil
 }
 
-func (ele *Elem) Bool() bool {
-	return false
+func (ele *Elem) Bool() (bool, error) {
+	if ele.String() == "true" {
+		return true, nil
+	} else if ele.String() == "false" {
+		return false, nil
+	}
+	return false, errors.New("value is not a boolean one")
 }
 
-func (ele *Elem) Float64() float64 {
-	return 0.0
+func (ele *Elem) Float64() (float64, error) {
+	var ErrNotFloat64 error = errors.New("value is not of float64 type")
+	i, err := strconv.ParseFloat(ele.String(), 64)
+	if err != nil {
+		return 0.0, ErrNotFloat64
+	}
+	return i, nil
+}
+
+func (ele *Elem) Slice() ([]string, error) {
+	var ErrNotSlice error = errors.New("value is not of slice type")
+	if ele.Type != T_ARRAY && ele.Type != T_OBJECT {
+		return []string{}, ErrNotSlice
+	}
+	s := make([]string, len(ele.Children))
+	for i, key := range ele.OrderedKeys {
+		s[i] = ele.Children[key].String()
+	}
+	return s, nil
+}
+
+func (ele *Elem) Map() (map[string]string, error) {
+	var ErrNotMap error = errors.New("value is not of map type")
+	if ele.Type != T_OBJECT {
+		return map[string]string{}, ErrNotMap
+	}
+	s := make(map[string]string, len(ele.Children))
+	for _, key := range ele.OrderedKeys {
+		s[key] = ele.Children[key].String()
+	}
+	return s, nil
 }
 
 func (ele *Elem) Find(path string) (ret *Elem, err error) {
@@ -184,6 +220,25 @@ func (ele *Elem) Find(path string) (ret *Elem, err error) {
 	return nil, fmt.Errorf("non-json element")
 }
 
+func (e *Elem) Select(path ...string) (values []string) {
+	for _, p := range path {
+		var value string
+		ele, err := e.Find(p)
+		if err == nil {
+			value = ele.String()
+		}
+		values = append(values, value)
+	}
+	return
+}
+
+//range the children with order
+func (ele *Elem) MapChildren(f func(*Elem)) {
+	for _, key := range ele.OrderedKeys {
+		f(ele.Children[key])
+	}
+}
+
 //read a selector from a string
 //example: readSelector(".key1[index1].key2")  returns key1, nil
 func readSelector(path string) (string, error) {
@@ -205,4 +260,13 @@ func readSelector(path string) (string, error) {
 		}
 		return "", fmt.Errorf("%s is not a meaningful selector which should begin with . or [", path)
 	}
+}
+
+func Get(json []byte, path string) (r *Elem, err error) {
+	parser := NewParser(json)
+	root, err := parser.Parse()
+	if err != nil {
+		return nil, err
+	}
+	return root.Find(path)
 }
