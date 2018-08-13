@@ -233,8 +233,9 @@ func (e *Elem) Select(path ...string) (values []string) {
 }
 
 //range the children with order
-func (ele *Elem) MapChildren(f func(*Elem)) {
-	for _, key := range ele.OrderedKeys {
+//func (ele *Elem) MapChildren(f func(*Elem)) {
+func (ele *Elem) IterateChildren(f func(*Elem)) {
+    for _, key := range ele.OrderedKeys {
 		f(ele.Children[key])
 	}
 }
