@@ -55,7 +55,7 @@ func (p *Parser) Parse() (root *Elem, err error) {
 	var offset int64
 	var ele *Elem
 	for {
-		token, length, err1 := ReadToken(p.data, offset)
+		token, length, err1 := readToken(p.data, offset)
 		if err1 == ErrEOF {
 			break
 		}
@@ -63,14 +63,14 @@ func (p *Parser) Parse() (root *Elem, err error) {
 			err = err1
 			return
 		}
-		if length == 1 && IsSeparator(token[0]) {
+		if length == 1 && isSeparator(token[0]) {
 			tk := token[0]
 			switch {
 			case tk == BraceOpen || tk == BracketOpen:
 				if tk == BraceOpen {
-					ele = NewElem(T_OBJECT, p, offset)
+					ele = newElem(T_OBJECT, p, offset)
 				} else {
-					ele = NewElem(T_ARRAY, p, offset)
+					ele = newElem(T_ARRAY, p, offset)
 				}
 				p.currentContainer = ele
 				p.stackPush(tk)
@@ -107,18 +107,18 @@ func (p *Parser) Parse() (root *Elem, err error) {
 				if p.currentContainer != nil && p.currentContainer.Type == T_OBJECT && p.unassignedKey == "" {
 					p.unassignedKey = string(bytes.Trim(token, "\""))
 				} else {
-					ele = NewElem(T_STRING, p, offset+1)
+					ele = newElem(T_STRING, p, offset+1)
 					ele.limit = offset + length - 1
 				}
-			case IsCertainValue(token, length):
+			case isCertainValue(token, length):
 				if string(token) == Null {
-					ele = NewElem(T_NULL, p, offset)
+					ele = newElem(T_NULL, p, offset)
 				} else {
-					ele = NewElem(T_BOOL, p, offset)
+					ele = newElem(T_BOOL, p, offset)
 				}
 				ele.limit = offset + length
 			default:
-				ele = NewElem(T_NUMBER, p, offset)
+				ele = newElem(T_NUMBER, p, offset)
 				ele.limit = offset + length
 			}
 		}
@@ -150,12 +150,12 @@ func (p *Parser) stackPull() (byte, error) {
 	return b, nil
 }
 
-func ReadToken(data []byte, offset int64) (token []byte, length int64, err error) {
+func readToken(data []byte, offset int64) (token []byte, length int64, err error) {
 	if offset >= int64(len(data)) {
 		return []byte{}, 0, ErrEOF
 	}
 	switch {
-	case IsSeparator(data[offset]):
+	case isSeparator(data[offset]):
 		return data[offset : offset+1], 1, nil
 	case data[offset] == '"':
 		//string, begin with quote, keep reading until the other half comes
@@ -168,7 +168,7 @@ func ReadToken(data []byte, offset int64) (token []byte, length int64, err error
 	default:
 		//number, bool or null, read till a separator
 		for i := offset + 1; i < int64(len(data)); i++ {
-			if IsSeparator(data[i]) && data[i-1] != '\\' {
+			if isSeparator(data[i]) && data[i-1] != '\\' {
 				return data[offset:i], i - offset, nil
 			}
 		}
@@ -176,7 +176,7 @@ func ReadToken(data []byte, offset int64) (token []byte, length int64, err error
 	}
 }
 
-func IsCertainValue(token []byte, length int64) bool {
+func isCertainValue(token []byte, length int64) bool {
 	if length > 5 {
 		return false
 	}
@@ -187,7 +187,7 @@ func IsCertainValue(token []byte, length int64) bool {
 	return false
 }
 
-func IsSeparator(b byte) bool {
+func isSeparator(b byte) bool {
 	for _, s := range Separators {
 		if s == b {
 			return true

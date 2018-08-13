@@ -29,7 +29,7 @@ type Elem struct {
 
 //create an element, the context of the parser is needed to
 //determine the element's attributes and relationships
-func NewElem(t int, p *Parser, offset int64) (ele *Elem) {
+func newElem(t int, p *Parser, offset int64) (ele *Elem) {
 	ele = &Elem{
 		Type:     t,
 		Key:      "",
